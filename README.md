@@ -22,6 +22,17 @@ application building, just sharing files with a simple, public install page.
 
 ## Usage
 
+Open `/` for the AppDistro dashboard. Unlock the workspace with `UPLOADS_SECRET_AUTH_TOKEN`
+to upload `.ipa`/`.apk` files, search and filter builds, copy installation links, download files,
+or delete old builds. The token stays in session storage for the current browser tab; **Lock
+workspace** clears it. The app list and all management APIs require authentication. Individual
+installation links remain public to anyone who has the link.
+
+Uploads appear in the dashboard automatically, including builds uploaded through the API and
+legacy builds. `GET /api/builds` lists builds newest first. Deleting the newest build restores
+the previous build as the latest version. The dashboard scans the configured storage, so it
+does not require an additional database or frontend build service.
+
 To run with Docker:
 
 ```sh
@@ -107,6 +118,9 @@ uploaded prior to v2.
   Open the interactive OpenAPI explorer (Swagger): http://localhost:3000/docs.
 
 - When changes to the dependencies are made, freeze them in the lockfile with: `make lock-deps`.
+
+- Run dashboard API tests with `python -m unittest discover -s tests -v` (requires `httpx`,
+  in addition to the development dependencies).
 
 ## License
 

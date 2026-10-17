@@ -87,13 +87,15 @@ def get_build_info_from_ipa(
 ) -> BuildInfo:
     with zipfile.ZipFile(ipa_file, "r") as ipa:
         for file in ipa.namelist():
-            if file.endswith(".app/Info.plist"):
+            if re.fullmatch(r"Payload/[^/]+\.app/Info\.plist", file):
                 plist_file_content = ipa.read(file)
 
                 info = plistlib.loads(plist_file_content)
                 bundle_id = info.get("CFBundleIdentifier")
-                app_title = info.get("CFBundleDisplayName")
-                bundle_version = info.get("CFBundleShortVersionString")
+                app_title = info.get("CFBundleDisplayName") or info.get("CFBundleName")
+                bundle_version = info.get("CFBundleShortVersionString") or info.get(
+                    "CFBundleVersion"
+                )
 
                 if bundle_id is None or app_title is None or bundle_version is None:
                     logger.error("Failed to extract plist file information")

@@ -1,4 +1,6 @@
 import json
+from datetime import datetime, timezone
+from threading import RLock
 
 from fs import errors, open_fs, path
 
@@ -14,6 +16,7 @@ INDEXES_DIRECTORY = "_indexes"
 
 
 filesystem = open_fs(STORAGE_URL, create=True)
+write_lock = RLock()
 
 
 def create_parent_directories(upload_id: str):
@@ -21,10 +24,31 @@ def create_parent_directories(upload_id: str):
 
 
 def save_upload(build_info: BuildInfo, app_file_content: bytes):
-    create_parent_directories(build_info.upload_id)
-    save_build_info(build_info)
-    save_app_file(build_info, app_file_content)
-    set_latest_build(build_info)
+    with write_lock:
+        create_parent_directories(build_info.upload_id)
+        save_build_info(build_info)
+        save_app_file(build_info, app_file_content)
+        set_latest_build(build_info)
+
+
+def list_builds() -> list[BuildInfo]:
+    builds = []
+    for entry in filesystem.scandir("/"):
+        if not entry.is_dir or entry.name.startswith("_"):
+            continue
+        try:
+            if get_upload_platform(entry.name) is not None:
+                build = load_build_info(entry.name)
+                if build.upload_id == entry.name:
+                    builds.append(build)
+        except (errors.ResourceNotFound, ValueError, KeyError):
+            logger.warning(f"Skipping incomplete build metadata in {entry.name!r}")
+
+    return sorted(
+        builds,
+        key=lambda build: build.created_at or datetime.min.replace(tzinfo=timezone.utc),
+        reverse=True,
+    )
 
 
 def get_upload_platform(upload_id: str) -> Platform | None:
@@ -128,7 +152,15 @@ def load_app_file(
 
 def delete_upload(upload_id: str):
     try:
-        filesystem.removetree(upload_id)
+        with write_lock:
+            build = load_build_info(upload_id)
+            filesystem.removetree(upload_id)
+            if get_latest_upload_id_by_bundle_id(build.bundle_id) == upload_id:
+                remaining = [item for item in list_builds() if item.bundle_id == build.bundle_id]
+                if remaining:
+                    set_latest_build(remaining[0])
+                else:
+                    filesystem.remove(get_latest_upload_by_bundle_id_filepath(build.bundle_id))
         logger.info(f"Upload directory {upload_id!r} deleted successfully")
     except Exception as e:
         logger.error(f"Failed to delete upload directory {upload_id!r}: {e}")
