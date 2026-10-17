@@ -56,7 +56,7 @@ async def exception_handler(
     exception: FastApiHTTPException | StarletteHTTPException,
 ) -> Response:
     if request.url.path.startswith("/api/"):
-        return PlainTextResponse(content=exception.detail)
+        return PlainTextResponse(content=exception.detail, status_code=exception.status_code)
 
     return await html_router.render_error_page(request, exception)
 
