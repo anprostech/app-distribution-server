@@ -23,6 +23,25 @@ router = APIRouter(tags=["HTML page handling"])
 templates = Jinja2Templates(directory="templates")
 
 
+@router.get("/", response_class=HTMLResponse, include_in_schema=False)
+async def dashboard(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request=request,
+        name="dashboard.jinja.html",
+        context={"page_title": APP_TITLE},
+        headers={
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+            "Referrer-Policy": "same-origin",
+            "Content-Security-Policy": (
+                "default-src 'self'; script-src 'self'; style-src 'self'; "
+                "img-src 'self' data:; connect-src 'self'; object-src 'none'; "
+                "base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+            ),
+        },
+    )
+
+
 @router.get(
     "/get/{upload_id}",
     response_class=HTMLResponse,

@@ -16,7 +16,13 @@ from app_distribution_server.errors import (
     UserError,
     status_codes_to_default_exception_types,
 )
-from app_distribution_server.routers import api_router, app_files_router, health_router, html_router
+from app_distribution_server.routers import (
+    api_router,
+    app_files_router,
+    health_router,
+    html_router,
+    transfer_router,
+)
 
 app = FastAPI(
     title=APP_TITLE,
@@ -45,6 +51,7 @@ def add_head_routes(router: APIRouter) -> APIRouter:
 
 
 app.include_router(api_router.router)
+app.include_router(transfer_router.router)
 app.include_router(add_head_routes(html_router.router))
 app.include_router(add_head_routes(app_files_router.router))
 app.include_router(health_router.router)
@@ -56,7 +63,7 @@ async def exception_handler(
     exception: FastApiHTTPException | StarletteHTTPException,
 ) -> Response:
     if request.url.path.startswith("/api/"):
-        return PlainTextResponse(content=exception.detail)
+        return PlainTextResponse(content=exception.detail, status_code=exception.status_code)
 
     return await html_router.render_error_page(request, exception)
 

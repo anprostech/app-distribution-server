@@ -22,6 +22,27 @@ application building, just sharing files with a simple, public install page.
 
 ## Usage
 
+Open `/` for the AppDistro dashboard. Unlock the workspace with `UPLOADS_SECRET_AUTH_TOKEN`
+to upload `.ipa`/`.apk` files, search and filter builds, copy installation links, download files,
+or delete old builds. The token stays in session storage for the current browser tab; **Lock
+workspace** clears it. The app list and all management APIs require authentication. Individual
+installation links remain public to anyone who has the link.
+
+Uploads appear in the dashboard automatically, including builds uploaded through the API and
+legacy builds. `GET /api/builds` lists builds newest first. Deleting the newest build restores
+the previous build as the latest version. The dashboard scans the configured storage, so it
+does not require an additional database or frontend build service.
+
+The dashboard sends uploads in 1 MB parts with two concurrent requests. Interrupted parts
+are retried automatically; use **Pause upload** / **Resume upload** to continue without
+restarting the file. After a refresh, select the same file in the same browser tab to resume.
+Temporary upload sessions expire after 24 hours and are cleaned up when a new session starts.
+Builds up to 2 GB are supported by this path. The original `/upload` and `/api/upload`
+endpoints remain available for existing API clients. Processing runs in the background and
+the dashboard polls its status, so a slow transfer or APK analysis does not require one long
+proxy request. The default single-process Uvicorn deployment is required for transfer job
+coordination; use shared job coordination before running multiple application workers.
+
 To run with Docker:
 
 ```sh
@@ -107,6 +128,9 @@ uploaded prior to v2.
   Open the interactive OpenAPI explorer (Swagger): http://localhost:3000/docs.
 
 - When changes to the dependencies are made, freeze them in the lockfile with: `make lock-deps`.
+
+- Run dashboard API tests with `python -m unittest discover -s tests -v` (requires `httpx`,
+  in addition to the development dependencies).
 
 ## License
 

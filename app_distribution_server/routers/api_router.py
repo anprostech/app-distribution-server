@@ -1,6 +1,8 @@
 import secrets
+from plistlib import InvalidFileException
+from zipfile import BadZipFile
 
-from fastapi import APIRouter, Depends, File, Path, UploadFile
+from fastapi import APIRouter, Depends, File, Path, Response, UploadFile
 from fastapi.responses import PlainTextResponse
 from fastapi.security import APIKeyHeader
 
@@ -23,6 +25,7 @@ from app_distribution_server.storage import (
     delete_upload,
     get_latest_upload_id_by_bundle_id,
     get_upload_asserted_platform,
+    list_builds,
     load_build_info,
     save_upload,
 )
@@ -51,10 +54,10 @@ def _upload_app(
     if app_file.filename is None:
         raise InvalidFileTypeError()
 
-    if app_file.filename.endswith(".ipa"):
+    if app_file.filename.lower().endswith(".ipa"):
         platform = Platform.ios
 
-    elif app_file.filename.endswith(".apk"):
+    elif app_file.filename.lower().endswith(".apk"):
         platform = Platform.android
 
     else:
@@ -62,7 +65,10 @@ def _upload_app(
 
     app_file_content = app_file.file.read()
 
-    build_info = get_build_info(platform, app_file_content)
+    try:
+        build_info = get_build_info(platform, app_file_content)
+    except (BadZipFile, InvalidFileException, ValueError, KeyError, TypeError, EOFError) as error:
+        raise InvalidFileTypeError() from error
     upload_id = build_info.upload_id
 
     logger.debug(f"Starting upload of {upload_id!r}")
@@ -72,6 +78,12 @@ def _upload_app(
     logger.info(f"Successfully uploaded {build_info.bundle_id!r} ({upload_id!r})")
 
     return build_info
+
+
+@router.get("/api/builds", summary="List uploaded app builds")
+def api_list_builds(response: Response) -> list[BuildInfo]:
+    response.headers["Cache-Control"] = "no-store"
+    return list_builds()
 
 
 _upload_route_kwargs = {
