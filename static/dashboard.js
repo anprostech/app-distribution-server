@@ -423,6 +423,8 @@
     }
     selectedFile = null;
     successUrl = "";
+    $("upload-submit").textContent = "Upload build";
+    $("upload-pause").hidden = true;
     $("upload-form").reset();
     $("file-label").textContent = "Drop your build here";
     $("file-detail").textContent = "or click to browse · .ipa and .apk";
@@ -455,6 +457,12 @@
       return;
     }
     selectedFile = file;
+    if (file.size > 2 * 1024 ** 3) {
+      selectedFile = null;
+      setError("upload-error", "Choose a build smaller than 2 GB.");
+      return;
+    }
+    $("upload-submit").textContent = "Upload build";
     $("upload-submit").disabled = false;
     $("file-detail").textContent =
       `${bytes(file.size)} · ${/\.ipa$/i.test(file.name) ? "iOS" : "Android"} · Click to change`;
@@ -479,96 +487,79 @@
     }
     selectFile(event.dataTransfer.files[0]);
   });
-  $("upload-form").addEventListener("submit", (event) => {
+  $("upload-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!selectedFile || uploadRequest) return;
-    const form = new FormData();
-    form.append("app_file", selectedFile);
-    const request = new XMLHttpRequest();
-    uploadRequest = request;
-    request.open("POST", "/api/upload");
-    request.setRequestHeader("X-Auth-Token", token);
-    request.timeout = 600000;
+    const transfer = new AppDistroTransfer(selectedFile, token, (progress) => {
+      if (progress.status === "retrying") {
+        $("upload-status").textContent =
+          `Reconnecting… retry ${progress.attempt} of 3`;
+        return;
+      }
+      const percent =
+        progress.status === "processing"
+          ? 100
+          : Math.min(99, Math.floor((progress.loaded / progress.total) * 100));
+      $("upload-progress").value = percent;
+      $("upload-percent").textContent = `${percent}%`;
+      $("upload-status").textContent =
+        progress.status === "processing"
+          ? "Processing build…"
+          : `Uploading · ${bytes(progress.speed)}/s`;
+      $("upload-transfer-detail").textContent =
+        progress.status === "processing"
+          ? "Upload complete. Reading app details…"
+          : `${bytes(progress.loaded)} of ${bytes(progress.total)} · Progress is saved automatically.`;
+      $("upload-pause").hidden = progress.status === "processing";
+    });
+    uploadRequest = transfer;
     $("upload-submit").disabled = true;
     $("build-file").disabled = true;
     $("drop-zone").classList.add("is-uploading");
     $("upload-progress-wrap").hidden = false;
+    $("upload-pause").hidden = false;
     $("upload-progress").value = 0;
     $("upload-percent").textContent = "0%";
-    $("upload-status").textContent = "Uploading…";
+    $("upload-status").textContent = "Preparing upload…";
+    $("upload-transfer-detail").textContent = "Checking for saved progress…";
     setError("upload-error");
-    const finished = () => {
-      uploadRequest = null;
-      $("drop-zone").classList.remove("is-uploading");
-      $("build-file").disabled = false;
-      $("upload-submit").disabled = false;
-    };
-    const fail = (message) => {
-      finished();
+    try {
+      const build = await transfer.run();
+      successUrl = installUrl(build);
       $("upload-progress-wrap").hidden = true;
-      setError("upload-error", message);
-    };
-    request.upload.onprogress = (progress) => {
-      if (!progress.lengthComputable) return;
-      const percent = Math.round((progress.loaded / progress.total) * 100);
-      $("upload-progress").value = percent;
-      $("upload-percent").textContent = `${percent}%`;
-      $("upload-status").textContent =
-        percent === 100 ? "Processing build…" : "Uploading…";
-    };
-    request.onload = () => {
-      if (request.status >= 200 && request.status < 300) {
-        try {
-          const build = JSON.parse(request.responseText);
-          successUrl = installUrl(build);
-          finished();
-          $("upload-progress-wrap").hidden = true;
-          $("drop-zone").hidden = true;
-          $("upload-submit").hidden = true;
-          $("success-link").href = successUrl;
-          $("upload-success").hidden = false;
-          $("upload-done").hidden = false;
-          resetFilters();
-          loadBuilds();
-        } catch {
-          fail(
-            "The server returned an unexpected response. Refresh the library before trying again.",
-          );
-        }
-      } else if (request.status === 403 || request.status === 401) {
-        finished();
+      $("drop-zone").hidden = true;
+      $("upload-submit").hidden = true;
+      $("success-link").href = successUrl;
+      $("upload-success").hidden = false;
+      $("upload-done").hidden = false;
+      resetFilters();
+      loadBuilds();
+    } catch (error) {
+      if (error.status === 401 || error.status === 403) {
         lock();
         showAuth(openUpload);
         setError(
           "auth-error",
-          "Your token is no longer valid. Unlock the workspace to upload again.",
+          "Your token is no longer valid. Unlock the workspace to resume.",
         );
-      } else if (request.status === 413)
-        fail(
-          "This build exceeds the server’s upload limit. Try a smaller build or increase the proxy limit.",
+      } else if (token && $("upload-dialog").open) {
+        setError(
+          "upload-error",
+          error.name === "AbortError"
+            ? "Upload paused. Click Resume upload to continue from the saved progress."
+            : error.message,
         );
-      else if (request.status === 400 || request.status === 422)
-        fail(
-          "We couldn’t read this build. Choose a valid exported .ipa or .apk file.",
-        );
-      else
-        fail(
-          "The server couldn’t process this build. Please try again or check the app’s server logs.",
-        );
-    };
-    request.onerror = () =>
-      fail(
-        "The upload connection was interrupted. Refresh the library before trying again.",
-      );
-    request.ontimeout = () =>
-      fail(
-        "The upload took too long. Refresh the library to check whether it completed.",
-      );
-    request.onabort = () => {
-      finished();
-    };
-    request.send(form);
+        $("upload-submit").textContent = "Resume upload";
+      }
+    } finally {
+      if (uploadRequest === transfer) uploadRequest = null;
+      $("upload-pause").hidden = true;
+      $("drop-zone").classList.remove("is-uploading");
+      $("build-file").disabled = false;
+      $("upload-submit").disabled = false;
+    }
   });
+  $("upload-pause").onclick = () => uploadRequest?.abort();
   $("success-copy").onclick = () => copyLink(successUrl);
   $("new-build").onclick = openUpload;
   $("banner-upload").onclick = openUpload;

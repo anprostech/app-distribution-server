@@ -33,6 +33,16 @@ legacy builds. `GET /api/builds` lists builds newest first. Deleting the newest 
 the previous build as the latest version. The dashboard scans the configured storage, so it
 does not require an additional database or frontend build service.
 
+The dashboard sends uploads in 1 MB parts with two concurrent requests. Interrupted parts
+are retried automatically; use **Pause upload** / **Resume upload** to continue without
+restarting the file. After a refresh, select the same file in the same browser tab to resume.
+Temporary upload sessions expire after 24 hours and are cleaned up when a new session starts.
+Builds up to 2 GB are supported by this path. The original `/upload` and `/api/upload`
+endpoints remain available for existing API clients. Processing runs in the background and
+the dashboard polls its status, so a slow transfer or APK analysis does not require one long
+proxy request. The default single-process Uvicorn deployment is required for transfer job
+coordination; use shared job coordination before running multiple application workers.
+
 To run with Docker:
 
 ```sh

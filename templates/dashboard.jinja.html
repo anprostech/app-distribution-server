@@ -6,8 +6,9 @@
     <meta name="theme-color" content="#176b58" />
     <title>App library · {{ page_title }}</title>
     <link rel="icon" href="/static/dashboard-mark.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="/static/dashboard.css?v=1" />
-    <script src="/static/dashboard.js?v=1" defer></script>
+    <link rel="stylesheet" href="/static/dashboard.css?v=2" />
+    <script src="/static/transfer.js?v=2" defer></script>
+    <script src="/static/dashboard.js?v=2" defer></script>
   </head>
   <body>
     <aside class="sidebar">
@@ -351,6 +352,7 @@
             ><span id="upload-percent">0%</span>
           </div>
           <progress id="upload-progress" max="100" value="0">0%</progress>
+          <p id="upload-transfer-detail" class="field-hint"></p>
         </div>
         <p id="upload-error" class="inline-error" role="alert" hidden></p>
         <div id="upload-success" class="upload-success" hidden>
@@ -390,6 +392,14 @@
           hidden
         >
           Back to library
+        </button>
+        <button
+          id="upload-pause"
+          type="button"
+          class="button secondary full-width"
+          hidden
+        >
+          Pause upload
         </button>
       </form>
     </dialog>

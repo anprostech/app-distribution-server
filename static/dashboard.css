@@ -1652,3 +1652,10 @@ progress::-webkit-progress-value {
     scroll-behavior: auto !important;
   }
 }
+
+#upload-transfer-detail {
+  font-size: 10px;
+  color: #6c7e71;
+  line-height: 1.7;
+  margin-top: 7px;
+}
